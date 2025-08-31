@@ -83,7 +83,6 @@ class PatchInfoDialog:
         default_author = self.existing_meta_info['author'] or "BG3 Compatibility Generator"
         default_description = self.existing_meta_info['description'] or "Auto-generated compatibility patch for selected races and appearance mods"
         default_version = self.existing_meta_info['version'] or "1.0.0.0"
-        default_regenerate_uuid = self.existing_meta_info['regenerate_uuid']
         
         # MOD名称
         ttk.Label(main_frame, text=self.parent.texts.get("label_mod_name", "MOD名称:")).grid(row=0, column=0, sticky=tk.W, pady=(0, 15), padx=(0, 15))
@@ -110,7 +109,7 @@ class PatchInfoDialog:
         self.version_entry.grid(row=3, column=1, sticky=(tk.W, tk.E), pady=(0, 15))
         
         # UUID选项
-        self.regenerate_uuid_var = tk.BooleanVar(value=default_regenerate_uuid)
+        self.regenerate_uuid_var = tk.BooleanVar()
         self.regenerate_uuid_check = ttk.Checkbutton(main_frame, 
                                                     text=self.parent.texts.get("regenerate_uuid", "重新生成UUID（推荐）"),
                                                     variable=self.regenerate_uuid_var)
@@ -134,6 +133,9 @@ class PatchInfoDialog:
         # 监听MOD名称变化
         self.mod_name_var.trace('w', self.on_mod_name_changed)
         
+        # 初始化UUID状态
+        self.update_uuid_checkbox_state()
+        
     def on_mod_name_changed(self, *args):
         """MOD名称变化时的处理"""
         current_name = self.mod_name_var.get().strip()
@@ -154,6 +156,30 @@ class PatchInfoDialog:
                 new_description = f"Auto-generated compatibility patch for selected races and appearance mods"
                 self.description_text.delete(1.0, tk.END)
                 self.description_text.insert(1.0, new_description)
+        
+        # 更新UUID复选框状态
+        self.update_uuid_checkbox_state()
+    
+    def update_uuid_checkbox_state(self):
+        """根据当前状态更新UUID复选框"""
+        current_name = self.mod_name_var.get().strip()
+        has_existing_uuid = bool(self.existing_meta_info.get('uuid', '').strip())
+        
+        # 规则1: 没有检测到UUID则自动勾选重新生成UUID，且是灰色不可手动取消勾选
+        if not has_existing_uuid:
+            self.regenerate_uuid_var.set(True)
+            self.regenerate_uuid_check.config(state='disabled')
+            return
+        
+        # 规则2和3: 检测到有UUID的情况
+        # 如果MOD名称与原始名称相同，默认不勾选但可手动选择
+        if current_name == self.original_mod_name:
+            self.regenerate_uuid_var.set(False)
+            self.regenerate_uuid_check.config(state='normal')
+        else:
+            # MOD名称发生变化，自动勾选重新生成UUID，且是灰色不可手动取消勾选
+            self.regenerate_uuid_var.set(True)
+            self.regenerate_uuid_check.config(state='disabled')
     
     def center_dialog(self):
         """居中显示对话框"""
@@ -501,7 +527,7 @@ class UIManager:
                                       self.app.texts.get("delete_success", f"文件 {file_name} 已删除").format(file_name=file_name))
         except Exception as e:
             messagebox.showerror(self.app.texts.get("error", "错误"), 
-                               self.app.texts.get("delete_error", f"删除文件时出错: {str(e)}"))
+                                self.app.texts.get("delete_error", "删除文件时出错: {error}").format(error=str(e)))
     
     def delete_appearance_file(self, index):
         """删除指定索引的外观pak文件和对应的解包文件夹"""
@@ -529,7 +555,7 @@ class UIManager:
                                       self.app.texts.get("delete_success", f"文件 {file_name} 已删除").format(file_name=file_name))
         except Exception as e:
             messagebox.showerror(self.app.texts.get("error", "错误"), 
-                               self.app.texts.get("delete_error", f"删除文件时出错: {str(e)}"))
+                                self.app.texts.get("delete_error", "删除文件时出错: {error}").format(error=str(e)))
 
     def clear_race_selection(self):
         """清除种族文件夹（删除Sourcemod文件夹内的所有内容）"""
@@ -542,7 +568,9 @@ class UIManager:
             if not contents:
                 return
             
-            count = len(contents)
+            # 只计算pak文件数量
+            pak_count = len([item for item in contents if item.is_file() and item.suffix.lower() == '.pak'])
+            count = pak_count if pak_count > 0 else len(contents)
             result = messagebox.askyesno(
                 self.app.texts.get("confirm_delete_title", "确认删除"), 
                 self.app.texts.get("confirm_delete_race_message", "确定要删除Sourcemod文件夹中的 {count} 个pak文件吗？\n此操作不可撤销！").format(count=count)
@@ -574,7 +602,9 @@ class UIManager:
             if not contents:
                 return
             
-            count = len(contents)
+            # 只计算pak文件数量
+            pak_count = len([item for item in contents if item.is_file() and item.suffix.lower() == '.pak'])
+            count = pak_count if pak_count > 0 else len(contents)
             result = messagebox.askyesno(
                 self.app.texts.get("confirm_delete_title", "确认删除"), 
                 self.app.texts.get("confirm_delete_appearance_message", "确定要删除Panagway文件夹中的 {count} 个pak文件吗？\n此操作不可撤销！").format(count=count)
@@ -737,27 +767,41 @@ class UIManager:
             dialog.grab_set()
             
             # 加载并显示图片
-            # exe中资源在临时目录
             if getattr(sys, 'frozen', False):
-                # 打包后的exe环境
-                sponsor_image_path = Path(sys._MEIPASS) / "sponsor.jpg"
+                # 打包后的exe环境 - 尝试多个可能的路径
+                possible_paths = [
+                    Path(sys._MEIPASS) / "sponsor.jpg",  # 根目录
+                    Path(sys._MEIPASS) / "src" / "asset" / "image" / "sponsor.jpg",  # 完整路径
+                ]
+                sponsor_image_path = None
+                for path in possible_paths:
+                    if path.exists():
+                        sponsor_image_path = path
+                        break
             else:
                 # 开发环境
                 sponsor_image_path = Path(self.app.get_application_path()) / "src" / "asset" / "image" / "sponsor.jpg"
-            if sponsor_image_path.exists():
-                image = Image.open(sponsor_image_path)
-                # 调整图片大小以适应弹窗
-                image = image.resize((400, 250), Image.Resampling.LANCZOS)
-                photo = ImageTk.PhotoImage(image)
-                
-                image_label = ttk.Label(dialog, image=photo)
-                image_label.image = photo  # 保持引用
-                image_label.pack(padx=20, pady=20)
+            # 强制加载图片，不显示文字备用方案
+            if sponsor_image_path and sponsor_image_path.exists():
+                try:
+                    image = Image.open(sponsor_image_path)
+                    # 调整图片大小以适应弹窗
+                    image = image.resize((400, 250), Image.Resampling.LANCZOS)
+                    photo = ImageTk.PhotoImage(image)
+                    
+                    image_label = ttk.Label(dialog, image=photo)
+                    image_label.image = photo  # 保持引用
+                    image_label.pack(padx=20, pady=20)
+                    print(f"✓ sponsor图片加载成功: {sponsor_image_path}")
+                except Exception as img_error:
+                    print(f"✗ 图片加载失败: {img_error}")
+                    dialog.destroy()
+                    return
             else:
-                # 图片不存在就显示文字
-                text_label = ttk.Label(dialog, text="感谢您的支持！\n如果您觉得这个工具有用，\n请考虑支持作者的开发工作。", 
-                                     font=('Arial', 12), justify='center')
-                text_label.pack(padx=40, pady=40)
+                # 如果图片不存在，关闭对话框
+                print(f"✗ sponsor图片未找到，路径: {sponsor_image_path}")
+                dialog.destroy()
+                return
             
             # 按钮区域
             button_frame = ttk.Frame(dialog)
@@ -781,10 +825,12 @@ class UIManager:
             dialog.geometry(f"+{x}+{y}")
             
         except ImportError:
-            # PIL不可用就简单提示
-            messagebox.showinfo("支持作者", "感谢您的支持！\n如果您觉得这个工具有用，请考虑支持作者的开发工作。")
+            # PIL不可用时不显示任何内容
+            print("✗ PIL库不可用，无法显示支持作者图片")
+            return
         except Exception as e:
-            messagebox.showerror("错误", f"显示支持信息时出错: {str(e)}")
+            print(f"✗ 显示支持信息时出错: {str(e)}")
+            return
     
     def center_window(self):
         """居中显示窗口"""

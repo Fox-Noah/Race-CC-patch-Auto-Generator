@@ -39,6 +39,7 @@ from src.ui import PatchInfoDialog, UIManager
 
 try:
     import tkinter as tk
+    from tkinter import messagebox
 except ImportError:
     print("错误：无法导入tkinter。请确保Python安装包含tkinter模块。")
     sys.exit(1)
@@ -109,20 +110,35 @@ class BG3CompatibilityGenerator:
         self.center_window()
         
         # 设置窗口图标
-        # 打包后图标在临时目录
         if getattr(sys, 'frozen', False):
-            # 打包环境
-            icon_path = Path(sys._MEIPASS) / "打包图标.ico"
+            # 打包环境 - 图标在_MEIPASS的src/asset/image目录下
+            icon_path = Path(sys._MEIPASS) / "src" / "asset" / "image" / "打包图标.ico"
         else:
             # 开发环境
             icon_path = self.app_dir / "src" / "asset" / "image" / "打包图标.ico"
+        
         if icon_path.exists():
-            self.root.iconbitmap(str(icon_path))
+            try:
+                self.root.iconbitmap(str(icon_path))
+                print(f"✓ 图标加载成功: {icon_path}")
+            except Exception as e:
+                print(f"✗ 图标加载失败: {e}")
+        else:
+            print(f"✗ 图标文件不存在: {icon_path}")
         
         self.root.deiconify()
         
         # 启动任务队列
         self.process_task_queue()
+    
+    def get_application_path(self):
+        """获取程序路径，支持开发和打包环境"""
+        if getattr(sys, 'frozen', False):
+            # 打包后的环境
+            return Path(sys.executable).parent
+        else:
+            # 开发环境
+            return Path(__file__).parent
     
     def process_task_queue(self):
         """处理任务队列消息"""
@@ -584,7 +600,7 @@ class BG3CompatibilityGenerator:
                 
         except Exception as e:
             self.ui_manager.show_error_message(self.texts.get("error", "错误"), 
-                               self.texts.get("delete_error", f"删除文件时出错: {str(e)}"))
+                                self.texts.get("delete_error", "删除文件时出错: {error}").format(error=str(e)))
     
     def refresh_pak_lists(self):
         """刷新pak文件列表"""
@@ -1103,40 +1119,50 @@ class BG3CompatibilityGenerator:
         if not self.appearance_data:
             return
             
-        # 收集配置
+        # 收集配置 - 按种族分组，每个种族内按外观排序
         all_race_configs = []
         
-        # 获取种族UUID
-        target_race_uuid = None
-        if self.race_data:
-            # 使用第一个种族UUID
-            first_race_info = next(iter(self.race_data.values()))
-            target_race_uuid = first_race_info['uuid']
-        
-        if not target_race_uuid:
-            return
-        
-        # 为每个外观文件生成配置
+        # 准备外观数据
+        valid_appearances = []
         for appearance_key, appearance_info in self.appearance_data.items():
-            appearance_content = appearance_info['content']
             pak_path = appearance_info.get('pak_path', '')
-            
-            # 检查该外观MOD是否有用户选择的种族
             if pak_path in self.appearance_race_selections:
                 selected_race_uuid = self.appearance_race_selections[pak_path]
-                
-                # 获取种族信息
                 race_info = VANILLA_RACE_MAPPING.get(selected_race_uuid.lower())
                 if race_info:
-                    race_name = race_info['name_en']
+                    valid_appearances.append({
+                        'key': appearance_key,
+                        'info': appearance_info,
+                        'pak_path': pak_path,
+                        'selected_race_uuid': selected_race_uuid,
+                        'race_name': race_info['name_en']
+                    })
+        
+        # 按种族循环，每个种族内循环所有外观
+        if self.race_data:
+            for race_key, race_info_data in self.race_data.items():
+                race_uuid = race_info_data['uuid']
+                
+                # 为当前种族生成所有外观配置
+                for appearance in valid_appearances:
+                    appearance_content = appearance['info']['content']
+                    race_name = appearance['race_name']
+                    selected_race_uuid = appearance['selected_race_uuid']
                     
-                    # 处理外观配置
-                    race_config = self.process_appearance_for_race(appearance_content, race_name, selected_race_uuid, target_race_uuid)
+                    # 处理外观配置，保持原始种族UUID不变
+                    race_config = self.process_appearance_for_race(appearance_content, race_name, selected_race_uuid, race_uuid)
                     if race_config:
                         all_race_configs.append(race_config)
-            else:
-                # 跳过该外观MOD
-                pass
+        else:
+            # 没有种族数据时，按外观顺序生成
+            for appearance in valid_appearances:
+                appearance_content = appearance['info']['content']
+                race_name = appearance['race_name']
+                selected_race_uuid = appearance['selected_race_uuid']
+                
+                race_config = self.process_appearance_for_race(appearance_content, race_name, selected_race_uuid, None)
+                if race_config:
+                    all_race_configs.append(race_config)
     
         
         if all_race_configs:

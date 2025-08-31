@@ -1,29 +1,29 @@
-# BG3 种族兼容性补丁生成器
+# BG3 Race Compatibility Patch Generator
 
-一个用于博德之门3的MOD兼容性工具，专门解决种族MOD和外观MOD之间的兼容性问题。
+A MOD compatibility tool for Baldur's Gate 3, specifically designed to resolve compatibility issues between race MODs and appearance MODs.
 
-## 开发笔记
+## Development Notes
 
--这个工具断断续续写了几个星期，主要是因为BG3的MOD格式比较复杂，需要解析LSX文件和处理各种边界情况。
--最开始想用C#写的，后来发现Python的tkinter做界面更简单，就改用Python了。代码可能不是最优雅的，但能用就行。
--目前功能可能不是很完善，欢迎反馈和建议。
+- This tool was developed on and off over several weeks, mainly because BG3's MOD format is quite complex, requiring parsing of LSX files and handling various edge cases.
+- Initially wanted to write it in C#, but later found that Python's tkinter was simpler for UI development, so switched to Python. The code might not be the most elegant, but it works.
+- Current functionality might not be perfect yet, feedback and suggestions are welcome.
 
-## 特别鸣谢
+## Special Thanks
 
-特别鸣谢以下开源库：
+Special thanks to the following open source libraries:
 
-- **[LSLib](https://github.com/Norbyte/lslib)** - 强大的Larian Studios文件格式库，提供了完整的文件格式支持
+- **[LSLib](https://github.com/Norbyte/lslib)** - Powerful Larian Studios file format library that provides complete file format support
 
-这个库是整个BG3 MOD社区的基石，向开发者们致敬！
+This library is the cornerstone of the entire BG3 MOD community, salute to the developers!
 
-## 许可证
+## License
 
-本项目仅供学习和个人使用，请勿用于商业用途。
+This project is for learning and personal use only, please do not use for commercial purposes.
 
-*版权声明**：
-- 禁止修改后重新发布,可以发表建议,或者申请修改代码
-- 如需分享，请直接提供原始项目链接
+**Copyright Notice:**
+- Redistribution after modification is prohibited. You may provide suggestions or request code modifications
+- For sharing, please provide the original project link directly
 
-## 问题反馈
+## Bug Reports
 
-如果遇到bug或者有功能建议，欢迎提issue。不过我平时比较忙，回复可能会慢一些。
+If you encounter bugs or have feature suggestions, feel free to submit an issue. However, I'm usually quite busy, so responses might be slow.

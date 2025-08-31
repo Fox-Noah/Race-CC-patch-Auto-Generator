@@ -1,0 +1,3 @@
+﻿System.IO.InvalidDataException: Empty headers.
+   at LSTools.DebuggerFrontend.DAPStream.RunLoop()
+   at LSTools.DebuggerFrontend.Program.Main(String[] args)

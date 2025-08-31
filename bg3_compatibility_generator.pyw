@@ -729,6 +729,10 @@ class BG3CompatibilityGenerator:
             total_steps = 3
             current_step = 0
             
+            # 清空之前的数据缓存
+            self.race_data.clear()
+            self.appearance_data.clear()
+            
             # 解析数据
             self.parse_extracted_data()
             current_step += 1
@@ -1138,10 +1142,11 @@ class BG3CompatibilityGenerator:
                         'race_name': race_info['name_en']
                     })
         
-        # 按种族循环，每个种族内循环所有外观
+        # 按种族分组，每个种族内包含所有外观
         if self.race_data:
+            # 为每个种族生成所有外观的配置
             for race_key, race_info_data in self.race_data.items():
-                race_uuid = race_info_data['uuid']
+                target_race_uuid = race_info_data['uuid']
                 
                 # 为当前种族生成所有外观配置
                 for appearance in valid_appearances:
@@ -1149,12 +1154,12 @@ class BG3CompatibilityGenerator:
                     race_name = appearance['race_name']
                     selected_race_uuid = appearance['selected_race_uuid']
                     
-                    # 处理外观配置，保持原始种族UUID不变
-                    race_config = self.process_appearance_for_race(appearance_content, race_name, selected_race_uuid, race_uuid)
+                    # 处理外观配置
+                    race_config = self.process_appearance_for_race(appearance_content, race_name, selected_race_uuid, target_race_uuid)
                     if race_config:
                         all_race_configs.append(race_config)
         else:
-            # 没有种族数据时，按外观顺序生成
+            # 没有种族数据时，使用原版种族
             for appearance in valid_appearances:
                 appearance_content = appearance['info']['content']
                 race_name = appearance['race_name']
